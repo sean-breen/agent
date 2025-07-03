@@ -20,6 +20,9 @@ on:
         type: boolean
         default: false
 
+# Disable the workflow
+if: false
+
 defaults:
   run:
     shell: bash

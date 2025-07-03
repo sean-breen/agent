@@ -13,6 +13,9 @@ on:
       - main
       - dev-v2
 
+# Disable the workflow
+if: false
+
 # Declare default permissions as read only.
 permissions: read-all
 

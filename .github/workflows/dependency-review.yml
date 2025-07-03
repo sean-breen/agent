@@ -7,6 +7,9 @@ on:
       - dev-v2
   merge_group:
 
+# Disable the workflow
+if: false
+
 concurrency:
   group: ${{ github.ref_name }}-deps-review
   cancel-in-progress: true

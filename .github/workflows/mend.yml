@@ -16,6 +16,9 @@ on:
     paths-ignore:
       - docs/**
 
+# Disable the workflow
+if: false
+
 concurrency:
   group: ${{ github.ref_name }}-mend
   cancel-in-progress: true

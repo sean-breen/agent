@@ -17,6 +17,9 @@ on:
   schedule:
     - cron: "36 6 * * 4" # run every Thursday at 06:36 UTC
 
+# Disable the workflow
+if: false
+
 concurrency:
   group: ${{ github.ref_name }}-codeql
   cancel-in-progress: true

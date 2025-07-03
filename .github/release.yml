@@ -1,26 +1,26 @@
-changelog:
-    exclude:
-        labels:
-            - skip-changelog
-    categories:
-        - title: 🌟 Highlights
-          labels:
-              - highlights
-        - title: 🚀 Features
-          labels:
-              - enhancement
-        - title: 💣 Breaking Changes
-          labels:
-              - change
-        - title: 🐛 Bug Fixes
-          labels:
-              - bug
-        - title: 📝 Documentation
-          labels:
-              - documentation
-        - title: 🔨 Maintenance
-          labels:
-              - chore
-        - title: ⬆️ Dependencies
-          labels:
-              - dependencies
+#changelog:
+#    exclude:
+#        labels:
+#            - skip-changelog
+#    categories:
+#        - title: 🌟 Highlights
+#          labels:
+#              - highlights
+#        - title: 🚀 Features
+#          labels:
+#              - enhancement
+#        - title: 💣 Breaking Changes
+#          labels:
+#              - change
+#        - title: 🐛 Bug Fixes
+#          labels:
+#              - bug
+#        - title: 📝 Documentation
+#          labels:
+#              - documentation
+#        - title: 🔨 Maintenance
+#          labels:
+#              - chore
+#        - title: ⬆️ Dependencies
+#          labels:
+#              - dependencies

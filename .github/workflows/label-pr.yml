@@ -4,6 +4,9 @@ on:
   pull_request_target:
     types: [opened, reopened, synchronize]
 
+# Disable the workflow
+if: false
+
 permissions:
   contents: read
 

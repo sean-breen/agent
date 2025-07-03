@@ -10,6 +10,9 @@ on:
       - synchronize
       - reopened
 
+# Disable the workflow
+if: false
+
 concurrency:
   group: ${{ github.ref_name }}-cla
 
