@@ -1,0 +1,25 @@
+OAPICODEGEN	    = github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.1.0
+LEFTHOOK	    = github.com/evilmartians/lefthook@v1.6.9
+GOLANGCILINT    = github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+PROTOCGENGO	    = google.golang.org/protobuf/cmd/protoc-gen-go@v1.32.0
+GOFUMPT	        = mvdan.cc/gofumpt@v0.6.0
+COUNTERFEITER   = github.com/maxbrunsfeld/counterfeiter/v6@v6.8.1
+NFPM            = github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.36.1
+GOTESTCOVERAGE  = github.com/vladopajic/go-test-coverage/v2@v2.10.1
+BENCHSTAT       = golang.org/x/perf/cmd/benchstat@v0.0.0-20240404204407-f3e401e020e4
+BUF             = github.com/bufbuild/buf/cmd/buf@v1.30.1
+
+install-tools: ## Install tool dependencies
+	@echo "Installing Tools"
+	
+	@$(GOINST) $(OAPICODEGEN)
+	@$(GOINST) $(LEFTHOOK)
+	@$(GOINST) $(GOLANGCILINT)
+	@$(GOINST) $(PROTOCGENGO)
+	@$(GOINST) $(GOFUMPT)
+	@$(GOINST) $(COUNTERFEITER)
+	@$(GOINST) $(NFPM)
+	@$(GOINST) $(GOTESTCOVERAGE)
+	@$(GOINST) $(BENCHSTAT)
+	@$(GOINST) $(BUF)
+	@$(GORUN) $(LEFTHOOK) install
