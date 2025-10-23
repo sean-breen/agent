@@ -37,17 +37,17 @@ const Percentage = 100
 
 type (
 	NginxLogScraper struct {
-		outChan   <-chan []*entry.Entry
-		cfg       *config.Config
-		settings  receiver.Settings
-		logger    *zap.Logger
 		mb        *metadata.MetricsBuilder
 		rb        *metadata.ResourceBuilder
-		pipes     []*pipeline.DirectedPipeline
+		logger    *zap.Logger
+		cfg       *config.Config
 		wg        *sync.WaitGroup
+		outChan   <-chan []*entry.Entry
 		cancel    context.CancelFunc
+		pipes     []*pipeline.DirectedPipeline
 		entries   []*entry.Entry
 		operators []operator.Config
+		settings  receiver.Settings
 		mut       sync.Mutex
 	}
 
@@ -104,7 +104,7 @@ func (nls *NginxLogScraper) ID() component.ID {
 	return component.NewID(metadata.Type)
 }
 
-// nolint: unparam
+//nolint:unparam // Result is always nil
 func (nls *NginxLogScraper) Start(parentCtx context.Context, _ component.Host) error {
 	nls.logger.Info("NGINX access log scraper started")
 	ctx, cancel := context.WithCancel(parentCtx)

@@ -46,7 +46,7 @@ type FakeFileManagerServiceInterface struct {
 	configUploadReturnsOnCall map[int]struct {
 		result1 error
 	}
-	DetermineFileActionsStub        func(context.Context, map[string]*v1.File, map[string]*model.FileCache) (map[string]*model.FileCache, map[string][]byte, error)
+	DetermineFileActionsStub        func(context.Context, map[string]*v1.File, map[string]*model.FileCache) (map[string]*model.FileCache, error)
 	determineFileActionsMutex       sync.RWMutex
 	determineFileActionsArgsForCall []struct {
 		arg1 context.Context
@@ -55,13 +55,11 @@ type FakeFileManagerServiceInterface struct {
 	}
 	determineFileActionsReturns struct {
 		result1 map[string]*model.FileCache
-		result2 map[string][]byte
-		result3 error
+		result2 error
 	}
 	determineFileActionsReturnsOnCall map[int]struct {
 		result1 map[string]*model.FileCache
-		result2 map[string][]byte
-		result3 error
+		result2 error
 	}
 	IsConnectedStub        func() bool
 	isConnectedMutex       sync.RWMutex
@@ -72,6 +70,12 @@ type FakeFileManagerServiceInterface struct {
 	}
 	isConnectedReturnsOnCall map[int]struct {
 		result1 bool
+	}
+	ResetClientStub        func(context.Context, v1.FileServiceClient)
+	resetClientMutex       sync.RWMutex
+	resetClientArgsForCall []struct {
+		arg1 context.Context
+		arg2 v1.FileServiceClient
 	}
 	RollbackStub        func(context.Context, string) error
 	rollbackMutex       sync.RWMutex
@@ -84,6 +88,11 @@ type FakeFileManagerServiceInterface struct {
 	}
 	rollbackReturnsOnCall map[int]struct {
 		result1 error
+	}
+	SetConfigPathStub        func(string)
+	setConfigPathMutex       sync.RWMutex
+	setConfigPathArgsForCall []struct {
+		arg1 string
 	}
 	SetIsConnectedStub        func(bool)
 	setIsConnectedMutex       sync.RWMutex
@@ -291,7 +300,7 @@ func (fake *FakeFileManagerServiceInterface) ConfigUploadReturnsOnCall(i int, re
 	}{result1}
 }
 
-func (fake *FakeFileManagerServiceInterface) DetermineFileActions(arg1 context.Context, arg2 map[string]*v1.File, arg3 map[string]*model.FileCache) (map[string]*model.FileCache, map[string][]byte, error) {
+func (fake *FakeFileManagerServiceInterface) DetermineFileActions(arg1 context.Context, arg2 map[string]*v1.File, arg3 map[string]*model.FileCache) (map[string]*model.FileCache, error) {
 	fake.determineFileActionsMutex.Lock()
 	ret, specificReturn := fake.determineFileActionsReturnsOnCall[len(fake.determineFileActionsArgsForCall)]
 	fake.determineFileActionsArgsForCall = append(fake.determineFileActionsArgsForCall, struct {
@@ -307,9 +316,9 @@ func (fake *FakeFileManagerServiceInterface) DetermineFileActions(arg1 context.C
 		return stub(arg1, arg2, arg3)
 	}
 	if specificReturn {
-		return ret.result1, ret.result2, ret.result3
+		return ret.result1, ret.result2
 	}
-	return fakeReturns.result1, fakeReturns.result2, fakeReturns.result3
+	return fakeReturns.result1, fakeReturns.result2
 }
 
 func (fake *FakeFileManagerServiceInterface) DetermineFileActionsCallCount() int {
@@ -318,7 +327,7 @@ func (fake *FakeFileManagerServiceInterface) DetermineFileActionsCallCount() int
 	return len(fake.determineFileActionsArgsForCall)
 }
 
-func (fake *FakeFileManagerServiceInterface) DetermineFileActionsCalls(stub func(context.Context, map[string]*v1.File, map[string]*model.FileCache) (map[string]*model.FileCache, map[string][]byte, error)) {
+func (fake *FakeFileManagerServiceInterface) DetermineFileActionsCalls(stub func(context.Context, map[string]*v1.File, map[string]*model.FileCache) (map[string]*model.FileCache, error)) {
 	fake.determineFileActionsMutex.Lock()
 	defer fake.determineFileActionsMutex.Unlock()
 	fake.DetermineFileActionsStub = stub
@@ -331,33 +340,30 @@ func (fake *FakeFileManagerServiceInterface) DetermineFileActionsArgsForCall(i i
 	return argsForCall.arg1, argsForCall.arg2, argsForCall.arg3
 }
 
-func (fake *FakeFileManagerServiceInterface) DetermineFileActionsReturns(result1 map[string]*model.FileCache, result2 map[string][]byte, result3 error) {
+func (fake *FakeFileManagerServiceInterface) DetermineFileActionsReturns(result1 map[string]*model.FileCache, result2 error) {
 	fake.determineFileActionsMutex.Lock()
 	defer fake.determineFileActionsMutex.Unlock()
 	fake.DetermineFileActionsStub = nil
 	fake.determineFileActionsReturns = struct {
 		result1 map[string]*model.FileCache
-		result2 map[string][]byte
-		result3 error
-	}{result1, result2, result3}
+		result2 error
+	}{result1, result2}
 }
 
-func (fake *FakeFileManagerServiceInterface) DetermineFileActionsReturnsOnCall(i int, result1 map[string]*model.FileCache, result2 map[string][]byte, result3 error) {
+func (fake *FakeFileManagerServiceInterface) DetermineFileActionsReturnsOnCall(i int, result1 map[string]*model.FileCache, result2 error) {
 	fake.determineFileActionsMutex.Lock()
 	defer fake.determineFileActionsMutex.Unlock()
 	fake.DetermineFileActionsStub = nil
 	if fake.determineFileActionsReturnsOnCall == nil {
 		fake.determineFileActionsReturnsOnCall = make(map[int]struct {
 			result1 map[string]*model.FileCache
-			result2 map[string][]byte
-			result3 error
+			result2 error
 		})
 	}
 	fake.determineFileActionsReturnsOnCall[i] = struct {
 		result1 map[string]*model.FileCache
-		result2 map[string][]byte
-		result3 error
-	}{result1, result2, result3}
+		result2 error
+	}{result1, result2}
 }
 
 func (fake *FakeFileManagerServiceInterface) IsConnected() bool {
@@ -411,6 +417,39 @@ func (fake *FakeFileManagerServiceInterface) IsConnectedReturnsOnCall(i int, res
 	fake.isConnectedReturnsOnCall[i] = struct {
 		result1 bool
 	}{result1}
+}
+
+func (fake *FakeFileManagerServiceInterface) ResetClient(arg1 context.Context, arg2 v1.FileServiceClient) {
+	fake.resetClientMutex.Lock()
+	fake.resetClientArgsForCall = append(fake.resetClientArgsForCall, struct {
+		arg1 context.Context
+		arg2 v1.FileServiceClient
+	}{arg1, arg2})
+	stub := fake.ResetClientStub
+	fake.recordInvocation("ResetClient", []interface{}{arg1, arg2})
+	fake.resetClientMutex.Unlock()
+	if stub != nil {
+		fake.ResetClientStub(arg1, arg2)
+	}
+}
+
+func (fake *FakeFileManagerServiceInterface) ResetClientCallCount() int {
+	fake.resetClientMutex.RLock()
+	defer fake.resetClientMutex.RUnlock()
+	return len(fake.resetClientArgsForCall)
+}
+
+func (fake *FakeFileManagerServiceInterface) ResetClientCalls(stub func(context.Context, v1.FileServiceClient)) {
+	fake.resetClientMutex.Lock()
+	defer fake.resetClientMutex.Unlock()
+	fake.ResetClientStub = stub
+}
+
+func (fake *FakeFileManagerServiceInterface) ResetClientArgsForCall(i int) (context.Context, v1.FileServiceClient) {
+	fake.resetClientMutex.RLock()
+	defer fake.resetClientMutex.RUnlock()
+	argsForCall := fake.resetClientArgsForCall[i]
+	return argsForCall.arg1, argsForCall.arg2
 }
 
 func (fake *FakeFileManagerServiceInterface) Rollback(arg1 context.Context, arg2 string) error {
@@ -473,6 +512,38 @@ func (fake *FakeFileManagerServiceInterface) RollbackReturnsOnCall(i int, result
 	fake.rollbackReturnsOnCall[i] = struct {
 		result1 error
 	}{result1}
+}
+
+func (fake *FakeFileManagerServiceInterface) SetConfigPath(arg1 string) {
+	fake.setConfigPathMutex.Lock()
+	fake.setConfigPathArgsForCall = append(fake.setConfigPathArgsForCall, struct {
+		arg1 string
+	}{arg1})
+	stub := fake.SetConfigPathStub
+	fake.recordInvocation("SetConfigPath", []interface{}{arg1})
+	fake.setConfigPathMutex.Unlock()
+	if stub != nil {
+		fake.SetConfigPathStub(arg1)
+	}
+}
+
+func (fake *FakeFileManagerServiceInterface) SetConfigPathCallCount() int {
+	fake.setConfigPathMutex.RLock()
+	defer fake.setConfigPathMutex.RUnlock()
+	return len(fake.setConfigPathArgsForCall)
+}
+
+func (fake *FakeFileManagerServiceInterface) SetConfigPathCalls(stub func(string)) {
+	fake.setConfigPathMutex.Lock()
+	defer fake.setConfigPathMutex.Unlock()
+	fake.SetConfigPathStub = stub
+}
+
+func (fake *FakeFileManagerServiceInterface) SetConfigPathArgsForCall(i int) string {
+	fake.setConfigPathMutex.RLock()
+	defer fake.setConfigPathMutex.RUnlock()
+	argsForCall := fake.setConfigPathArgsForCall[i]
+	return argsForCall.arg1
 }
 
 func (fake *FakeFileManagerServiceInterface) SetIsConnected(arg1 bool) {
@@ -585,8 +656,12 @@ func (fake *FakeFileManagerServiceInterface) Invocations() map[string][][]interf
 	defer fake.determineFileActionsMutex.RUnlock()
 	fake.isConnectedMutex.RLock()
 	defer fake.isConnectedMutex.RUnlock()
+	fake.resetClientMutex.RLock()
+	defer fake.resetClientMutex.RUnlock()
 	fake.rollbackMutex.RLock()
 	defer fake.rollbackMutex.RUnlock()
+	fake.setConfigPathMutex.RLock()
+	defer fake.setConfigPathMutex.RUnlock()
 	fake.setIsConnectedMutex.RLock()
 	defer fake.setIsConnectedMutex.RUnlock()
 	fake.updateCurrentFilesOnDiskMutex.RLock()

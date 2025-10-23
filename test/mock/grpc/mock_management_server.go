@@ -21,7 +21,7 @@ import (
 	"github.com/nginx/agent/v3/api/grpc/mpi/v1"
 	"github.com/nginx/agent/v3/internal/config"
 
-	"github.com/bufbuild/protovalidate-go"
+	"buf.build/go/protovalidate"
 	protovalidateInterceptor "github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/protovalidate"
 	grpcvalidator "github.com/grpc-ecosystem/go-grpc-middleware/validator"
 	"google.golang.org/grpc"
@@ -64,14 +64,17 @@ type MockManagementServer struct {
 }
 
 func NewMockManagementServer(
+	ctx context.Context,
 	apiAddress string,
 	agentConfig *config.Config,
 	configDirectory *string,
+	externalFileServer *string,
 ) (*MockManagementServer, error) {
 	var err error
 	requestChan := make(chan *v1.ManagementPlaneRequest)
 
-	commandService := serveCommandService(apiAddress, agentConfig, requestChan, *configDirectory)
+	commandService := serveCommandService(ctx, apiAddress, agentConfig, requestChan, *configDirectory,
+		*externalFileServer)
 
 	var fileServer *FileService
 
@@ -82,10 +85,11 @@ func NewMockManagementServer(
 	fileServiceLock.Lock()
 	defer fileServiceLock.Unlock()
 
-	grpcListener, err := net.Listen(connectionType,
+	listenConfig := &net.ListenConfig{}
+	grpcListener, err := listenConfig.Listen(ctx, connectionType,
 		fmt.Sprintf("%s:%d", agentConfig.Command.Server.Host, agentConfig.Command.Server.Port))
 	if err != nil {
-		slog.Error("Failed to listen", "error", err)
+		slog.ErrorContext(ctx, "Failed to listen", "error", err)
 		return nil, err
 	}
 
@@ -178,16 +182,19 @@ func serverOptions(agentConfig *config.Config) []grpc.ServerOption {
 	return opts
 }
 
+//nolint:revive // Have to add a new parameter here to support external file server
 func serveCommandService(
+	ctx context.Context,
 	apiAddress string,
 	agentConfig *config.Config,
 	requestChan chan *v1.ManagementPlaneRequest,
 	configDirectory string,
+	externalFileServer string,
 ) *CommandService {
-	commandServer := NewCommandService(requestChan, configDirectory)
+	commandServer := NewCommandService(requestChan, configDirectory, externalFileServer)
 
 	go func() {
-		cmdListener, listenerErr := createListener(apiAddress, agentConfig)
+		cmdListener, listenerErr := createListener(ctx, apiAddress, agentConfig)
 		if listenerErr != nil {
 			return
 		}
@@ -202,12 +209,12 @@ func serveCommandService(
 	return commandServer
 }
 
-func createListener(apiAddress string, agentConfig *config.Config) (net.Listener, error) {
+func createListener(ctx context.Context, apiAddress string, agentConfig *config.Config) (net.Listener, error) {
 	if agentConfig.Command.TLS != nil {
 		cert, keyPairErr := tls.LoadX509KeyPair(agentConfig.Command.TLS.Cert, agentConfig.Command.TLS.Key)
 
 		if keyPairErr == nil {
-			slog.Error("Failed to load key and cert pair", "error", keyPairErr)
+			slog.ErrorContext(ctx, "Failed to load key and cert pair", "error", keyPairErr)
 			return tls.Listen(connectionType, apiAddress, &tls.Config{
 				Certificates: []tls.Certificate{cert},
 				MinVersion:   tls.VersionTLS12,
@@ -215,7 +222,9 @@ func createListener(apiAddress string, agentConfig *config.Config) (net.Listener
 		}
 	}
 
-	return net.Listen(connectionType, apiAddress)
+	listenConfig := &net.ListenConfig{}
+
+	return listenConfig.Listen(ctx, connectionType, apiAddress)
 }
 
 func reportHealth(healthcheck *health.Server, agentConfig *config.Config) {

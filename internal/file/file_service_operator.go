@@ -14,6 +14,7 @@ import (
 	"maps"
 	"math"
 	"os"
+	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -24,15 +25,13 @@ import (
 	"github.com/nginx/agent/v3/internal/config"
 	internalgrpc "github.com/nginx/agent/v3/internal/grpc"
 	"github.com/nginx/agent/v3/internal/logger"
-	"github.com/nginx/agent/v3/internal/model"
 	"github.com/nginx/agent/v3/pkg/files"
 	"github.com/nginx/agent/v3/pkg/id"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-// File service operator handles requests to the grpc file service
-
+// FileServiceOperator handles requests to the grpc file service
 type FileServiceOperator struct {
 	fileServiceClient mpi.FileServiceClient
 	agentConfig       *config.Config
@@ -56,6 +55,11 @@ func NewFileServiceOperator(agentConfig *config.Config, fileServiceClient mpi.Fi
 	}
 }
 
+func (fso *FileServiceOperator) UpdateClient(ctx context.Context, fileServiceClient mpi.FileServiceClient) {
+	fso.fileServiceClient = fileServiceClient
+	slog.DebugContext(ctx, "File service operator updated client")
+}
+
 func (fso *FileServiceOperator) SetIsConnected(isConnected bool) {
 	fso.isConnected.Store(isConnected)
 }
@@ -64,8 +68,10 @@ func (fso *FileServiceOperator) IsConnected() bool {
 	return fso.isConnected.Load()
 }
 
-func (fso *FileServiceOperator) File(ctx context.Context, file *mpi.File,
-	fileActions map[string]*model.FileCache,
+func (fso *FileServiceOperator) File(
+	ctx context.Context,
+	file *mpi.File,
+	tempFilePath, expectedHash string,
 ) error {
 	slog.DebugContext(ctx, "Getting file", "file", file.GetFileMeta().GetName())
 
@@ -92,18 +98,23 @@ func (fso *FileServiceOperator) File(ctx context.Context, file *mpi.File,
 		return fmt.Errorf("error getting file data for %s: %w", file.GetFileMeta(), getFileErr)
 	}
 
-	if writeErr := fso.fileOperator.Write(ctx, getFileResp.GetContents().GetContents(),
-		file.GetFileMeta()); writeErr != nil {
+	if writeErr := fso.fileOperator.Write(
+		ctx,
+		getFileResp.GetContents().GetContents(),
+		tempFilePath,
+		file.GetFileMeta().GetPermissions(),
+	); writeErr != nil {
 		return writeErr
 	}
 
-	return fso.validateFileHash(file.GetFileMeta().GetName(), fileActions)
+	return fso.validateFileHash(tempFilePath, expectedHash)
 }
 
 func (fso *FileServiceOperator) UpdateOverview(
 	ctx context.Context,
 	instanceID string,
 	filesToUpdate []*mpi.File,
+	configPath string,
 	iteration int,
 ) error {
 	correlationID := logger.CorrelationID(ctx)
@@ -127,11 +138,35 @@ func (fso *FileServiceOperator) UpdateOverview(
 				InstanceId: instanceID,
 				Version:    files.GenerateConfigVersion(filesToUpdate),
 			},
+			ConfigPath: configPath,
 		},
 	}
 
-	backOffCtx, backoffCancel := context.WithTimeout(newCtx, fso.agentConfig.Client.Backoff.MaxElapsedTime)
-	defer backoffCancel()
+	backoffSettings := &config.BackOff{
+		InitialInterval:     fso.agentConfig.Client.Backoff.InitialInterval,
+		MaxInterval:         fso.agentConfig.Client.Backoff.MaxInterval,
+		MaxElapsedTime:      fso.agentConfig.Client.Backoff.MaxElapsedTime,
+		RandomizationFactor: fso.agentConfig.Client.Backoff.RandomizationFactor,
+		Multiplier:          fso.agentConfig.Client.Backoff.Multiplier,
+	}
+
+	// If the create connection takes a long time that we wait indefinitely to do
+	// the initial file overview update to ensure that the management plane has a file overview
+	// on agent startup.
+	if !fso.isConnected.Load() {
+		slog.DebugContext(
+			newCtx,
+			"Not connected to management plane yet, "+
+				"retrying indefinitely to update file overview until connection is created",
+		)
+		backoffSettings = &config.BackOff{
+			InitialInterval:     fso.agentConfig.Client.Backoff.InitialInterval,
+			MaxInterval:         fso.agentConfig.Client.Backoff.MaxInterval,
+			MaxElapsedTime:      0,
+			RandomizationFactor: fso.agentConfig.Client.Backoff.RandomizationFactor,
+			Multiplier:          fso.agentConfig.Client.Backoff.Multiplier,
+		}
+	}
 
 	sendUpdateOverview := func() (*mpi.UpdateOverviewResponse, error) {
 		if fso.fileServiceClient == nil {
@@ -160,10 +195,9 @@ func (fso *FileServiceOperator) UpdateOverview(
 		return response, nil
 	}
 
-	backoffSettings := fso.agentConfig.Client.Backoff
 	response, err := backoff.RetryWithData(
 		sendUpdateOverview,
-		backoffHelpers.Context(backOffCtx, backoffSettings),
+		backoffHelpers.Context(newCtx, backoffSettings),
 	)
 	if err != nil {
 		return err
@@ -172,19 +206,23 @@ func (fso *FileServiceOperator) UpdateOverview(
 	slog.DebugContext(newCtx, "UpdateOverview response", "response", response)
 
 	if response.GetOverview() == nil {
-		slog.DebugContext(ctx, "UpdateOverview response is empty")
+		slog.DebugContext(newCtx, "UpdateOverview response is empty")
 		return nil
 	}
 	delta := files.ConvertToMapOfFiles(response.GetOverview().GetFiles())
 
+	// Make sure that the original context is used if a file upload is required so that original correlation ID
+	// can be used again for update file overview request
 	if len(delta) != 0 {
-		return fso.updateFiles(ctx, delta, instanceID, iteration)
+		return fso.updateFiles(ctx, delta, instanceID, configPath, iteration)
 	}
 
 	return err
 }
 
-func (fso *FileServiceOperator) ChunkedFile(ctx context.Context, file *mpi.File) error {
+func (fso *FileServiceOperator) ChunkedFile(
+	ctx context.Context, file *mpi.File, tempFilePath, expectedHash string,
+) error {
 	slog.DebugContext(ctx, "Getting chunked file", "file", file.GetFileMeta().GetName())
 
 	stream, err := fso.fileServiceClient.GetFileStream(ctx, &mpi.GetFileRequest{
@@ -209,12 +247,14 @@ func (fso *FileServiceOperator) ChunkedFile(ctx context.Context, file *mpi.File)
 
 	header := headerChunk.GetHeader()
 
-	writeChunkedFileError := fso.fileOperator.WriteChunkedFile(ctx, file, header, stream)
+	writeChunkedFileError := fso.fileOperator.WriteChunkedFile(
+		ctx, tempFilePath, file.GetFileMeta().GetPermissions(), header, stream,
+	)
 	if writeChunkedFileError != nil {
 		return writeChunkedFileError
 	}
 
-	return nil
+	return fso.validateFileHash(tempFilePath, expectedHash)
 }
 
 func (fso *FileServiceOperator) UpdateFile(
@@ -236,15 +276,38 @@ func (fso *FileServiceOperator) UpdateFile(
 	return fso.sendUpdateFileStream(ctx, fileToUpdate, fso.agentConfig.Client.Grpc.FileChunkSize)
 }
 
-func (fso *FileServiceOperator) validateFileHash(filePath string, fileActions map[string]*model.FileCache) error {
+// renameFile, renames (moves) file from tempDir to new location to update file.
+func (fso *FileServiceOperator) RenameFile(
+	ctx context.Context, hash, fileName, dir string,
+) error {
+	slog.DebugContext(ctx, "Renaming file", "file", fileName)
+	tempFilePath := filepath.Join(dir, fileName)
+
+	// Create parent directories for the target file if they don't exist
+	if err := os.MkdirAll(filepath.Dir(fileName), dirPerm); err != nil {
+		return fmt.Errorf("failed to create directories for %s: %w", fileName, err)
+	}
+
+	moveErr := os.Rename(tempFilePath, fileName)
+	if moveErr != nil {
+		return fmt.Errorf("failed to rename file: %w", moveErr)
+	}
+
+	return fso.validateFileHash(fileName, hash)
+}
+
+func (fso *FileServiceOperator) validateFileHash(filePath, expectedHash string) error {
 	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
 	fileHash := files.GenerateHash(content)
 
-	if fileHash != fileActions[filePath].File.GetFileMeta().GetHash() {
-		return fmt.Errorf("error writing file, file hash does not match for file %s", filePath)
+	if fileHash != expectedHash {
+		return fmt.Errorf(
+			"error writing file, file hash does not match for file %s, expected hash: %s actual hash: %s",
+			filePath, fileHash, expectedHash,
+		)
 	}
 
 	return nil
@@ -254,6 +317,7 @@ func (fso *FileServiceOperator) updateFiles(
 	ctx context.Context,
 	delta map[string]*mpi.File,
 	instanceID string,
+	configPath string,
 	iteration int,
 ) error {
 	diffFiles := slices.Collect(maps.Values(delta))
@@ -268,7 +332,7 @@ func (fso *FileServiceOperator) updateFiles(
 	iteration++
 	slog.InfoContext(ctx, "Updating file overview after file updates", "attempt_number", iteration)
 
-	return fso.UpdateOverview(ctx, instanceID, diffFiles, iteration)
+	return fso.UpdateOverview(ctx, instanceID, diffFiles, configPath, iteration)
 }
 
 func (fso *FileServiceOperator) sendUpdateFileRequest(
